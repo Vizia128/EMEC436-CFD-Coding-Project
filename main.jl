@@ -96,7 +96,7 @@ end
 function solvePoisson(Us, Vs, P, dt, params)
     (; ρ, n, m, dxi, dyi, dxi2, dyi2, ϵ, ω, itermax) = params
     dti = 1/dt
-    rhs::Matrix{Float32} = zeros(size(P))
+    rhs::Matrix{Float64} = zeros(size(P))
     for i in 2:n+1, j in 2:m+1
         rhs[i-1, j-1] = ρ*dti*(dxi*(Us[i,j] - Us[i-1,j]) + dyi*(Vs[i,j] - Vs[i,j-1]))
     end
@@ -145,11 +145,14 @@ function postProc(Ut, Vt, Pt, params)
 
     f = Figure()
 
-    heatmap(f[1,1], sliceU; axis = (; title = "U"))
-    heatmap(f[1,2], sliceV; axis = (; title = "V"))
-    heatmap(f[1,3], sliceP; axis = (; title = "P"))
+    _, au = heatmap(f[1,1], sliceU; axis = (; title = "U"))
+    Colorbar(f[2,1], au; vertical=false)
+    _, av = heatmap(f[1,2], sliceV; axis = (; title = "V"))
+    Colorbar(f[2,2], av; vertical=false)
+    _, ap = heatmap(f[1,3], sliceP; axis = (; title = "P"))
+    Colorbar(f[2,3], ap; vertical=false)
 
-    sl = Slider(f[2, 1:3], horizontal = true, range = 1:t_step_max)
+    sl = Slider(f[3, 1:3], horizontal = true, range = 1:t_step_max)
     connect!(t_index, sl.value)
 
     return f
@@ -158,16 +161,16 @@ end
 function fluidsolve(params::Parameters)
     (; n, m, t_end, t_step_max) = params
 
-    U::Matrix{Float32} = zeros(n + 1, m + 2)
-    V::Matrix{Float32} = zeros(n + 2, m + 1)
-    P::Matrix{Float32} = zeros(n + 2, m + 2)
+    U::Matrix{Float64} = zeros(n + 1, m + 2)
+    V::Matrix{Float64} = zeros(n + 2, m + 1)
+    P::Matrix{Float64} = zeros(n + 2, m + 2)
 
-    Us::Matrix{Float32} = zeros(n + 1, m + 2)
-    Vs::Matrix{Float32} = zeros(n + 2, m + 1)
+    Us::Matrix{Float64} = zeros(n + 1, m + 2)
+    Vs::Matrix{Float64} = zeros(n + 2, m + 1)
 
-    Ut::Array{Float32} = zeros(n + 1, m + 2, t_step_max)
-    Vt::Array{Float32} = zeros(n + 2, m + 1, t_step_max)
-    Pt::Array{Float32} = zeros(n + 2, m + 2, t_step_max)
+    Ut::Array{Float64} = zeros(n + 1, m + 2, t_step_max)
+    Vt::Array{Float64} = zeros(n + 2, m + 1, t_step_max)
+    Pt::Array{Float64} = zeros(n + 2, m + 2, t_step_max)
     
     t = 0.
     t_step = 0
