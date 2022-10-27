@@ -1,0 +1,10 @@
+$dt = tau \cdot \mathrm{max}\left( 1.0e-9, \mathrm{min}\left( \left[
+\begin{array}{c}
+\frac{0.5 \cdot Re}{dxi^{2} + dyi^{2}} \\
+\frac{dx}{\mathrm{max}\left( \mathrm{max}\left( \left|U\right| \right) \right)} \\
+\frac{dy}{\mathrm{max}\left( \mathrm{max}\left( \left|V\right| \right) \right)} \\
+\end{array}
+\right] \right) \right)$
+
+
+$dt = \tau \cdot \mathrm{max}\left( 1.0e-9, \mathrm{min}\left( \frac{0.5 \cdot Re}{dx^{-2} + dy^{-2}}, \frac{dx}{\mathrm{maximum}\left( \left|U\right| \right)}, \frac{dy}{\mathrm{maximum}\left( \left|V\right| \right)} \right) \right)$
