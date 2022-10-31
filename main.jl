@@ -105,7 +105,7 @@ function solvePoisson(Us, Vs, P, dt, params)
     divg = 1
     while iter ≤ itermax && divg ≥ ϵ
         for i in 2:n+1, j in 2:m+1
-            P[i,j] = (1-ω)*P[i,j] + ω*inv(2*(dxi2+dyi2))*(dxi2*(P[i-1,j] + P[i+1,j]) + dyi2*(P[i,j-1] + P[i,j+1]) - rhs[i,j])
+            P[i,j] = (1-ω)*P[i,j] + ω*inv(2*(dxi2+dyi2))*(dxi2*(P[i-1,j] + P[i+1,j]) + dyi2*(P[i,j-1] + P[i,j+1]) - rhs[i-1,j-1])
         end
 
         # update the pressure boundary conditions in the ghost cells
@@ -117,7 +117,7 @@ function solvePoisson(Us, Vs, P, dt, params)
         # check for convergence
         divg_ij_sum = 0
         for i in 2:n+1, j in 2:m+1
-            divg_ij_sum += (dxi2*(P[i-1,j] - 2P[i,j] + P[i+1,j]) + dxi2*(P[i,j-1] - 2P[i,j] + P[i,j+1]) - rhs[i,j])^2
+            divg_ij_sum += (dxi2*(P[i-1,j] - 2P[i,j] + P[i+1,j]) + dxi2*(P[i,j-1] - 2P[i,j] + P[i,j+1]) - rhs[i-1,j-1])^2
         end
         divg = sqrt(divg_ij_sum / (n*m))
         iter += 1
@@ -183,16 +183,20 @@ function fluidsolve(params::Parameters)
 
         t += dt
         t_step += 1
-        Ut[:,:,t_step] = U
-        Vt[:,:,t_step] = V
-        Pt[:,:,t_step] = P
+        
+        # Ut[:,:,t_step] = U
+        # Vt[:,:,t_step] = V
+        # Pt[:,:,t_step] = P
         println("t_step: $t_step , t: $(round(t; digits=6)) , divg: $divg)")
     end
 
-    return postProc(Ut, Vt, Pt, params)
+    return postProc(U, V, P, params)
 end
 
 function main()
-    params = Parameters(;n=36, m=36)
+    params = Parameters(;n=36, m=36, t_end=1)
     return fluidsolve(params)
 end
+
+# solution histories
+# tables
