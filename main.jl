@@ -208,7 +208,7 @@ function fluidsolve(params::Parameters)
         println("t_step: $t_step , t: $(round(t; digits=6)) , divg: $(round(divg; digits=6)) , maxP: $(round(maximum(P); digits=6)) , maxU: $(round(maximum(U); digits=6)) , maxV: $(round(maximum(V); digits=6))")
     end
 
-    return postProc(U, V, P, params)
+    return postProc(Ut, Vt, Pt, params)
 end
 
 function main()
