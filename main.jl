@@ -1,4 +1,4 @@
-using LinearAlgebra, GLMakie, Observables
+using LinearAlgebra, GLMakie, Observables, Interpolations
 
 struct Parameters
     L # length in the x and y directions
@@ -26,7 +26,7 @@ struct Parameters
     dyi2
 end
 
-function Parameters(;L = 1.0, t_end = 35, t_step_max = 128, U_dim = 1.0, μ = 1.0, ρ = 1000.0, τ = 0.5, ϵ = 0.001, ω = 1.7, itermax = 100, BC = 1, n = 25, m = 25)
+function Parameters(;L = 1.0, t_end = 35, t_step_max = 128, U_dim = 1.0, μ = 1.0, ρ = 1000.0, τ = 0.9, ϵ = 0.001, ω = 1.7, itermax = 100, BC = 1, n = 25, m = 25)
     Re = ρ*U_dim*L/μ
     dx, dy = L/n, L/m
     dxi, dyi = 1/dx, 1/dy
@@ -35,8 +35,8 @@ function Parameters(;L = 1.0, t_end = 35, t_step_max = 128, U_dim = 1.0, μ = 1.
 end
 
 function comp_delt(U, V, params)
-    (; τ, Re, dx, dy) = params
-    return τ*max(1.0e-9, min(0.5*Re/(dx^-2 + dy^-2), dx/maximum(abs.(U)), dy/maximum(abs.(V))))
+    (; τ, Re, dx, dy, dxi2, dyi2) = params
+    return τ*max(1.0e-9, min(0.5*Re/(dxi2 + dyi2), dx/maximum(abs.(U)), dy/maximum(abs.(V))))
 end
 
 function placeBCs(U, V, params)
@@ -67,7 +67,7 @@ function solveFG(U, V, Us, Vs, dt, params)
         d2udx2 = dxi2*(U[i-1,j] - 2*U[i,j] + U[i+1,j]) # second derivative of u in x
         d2udy2 = dyi2*(U[i,j-1] - 2*U[i,j] + U[i,j+1]) # second derivative of u in y
         du2dx = dxi*(((U[i,j] + U[i+1,j])/2)^2 - ((U[i-1,j] + U[i,j])/2)^2) # first derivative of u^2 in x
-        duvdy = dyi*((U[i,j] + U[i,j+1])*(V[i,j]*V[i+1,j])/4 + (U[i,j-1] + U[i,j])*(V[i,j-1]*V[i+1,j-1])/4) # first derivative of uv in y
+        duvdy = dyi*((U[i,j] + U[i,j+1])*(V[i,j]*V[i+1,j])/4 - (U[i,j-1] + U[i,j])*(V[i,j-1]*V[i+1,j-1])/4) # first derivative of uv in y
         
         Fij = μ/ρ*(d2udx2 + d2udy2) - du2dx - duvdy
         Us[i,j] = U[i,j] + Fij*dt # predict the updated u velocity
@@ -76,8 +76,8 @@ function solveFG(U, V, Us, Vs, dt, params)
     for i in 2:n+1, j in 2:m
         d2vdx2 = dxi2*(V[i-1,j] - 2*V[i,j] + V[i+1,j]) # second derivative of v in x
         d2vdy2 = dyi2*(V[i,j-1] - 2*V[i,j] + V[i,j+1]) # second derivative of v in y
-        dv2dx = dxi*(((V[i,j] + V[i,j+1])/2)^2 - ((V[i,j-1] + V[i,j])/2)^2) # first derivative of u^2 in x
-        dvudy = dyi*((U[i,j] + U[i,j+1])*(V[i,j]*V[i+1,j])/4 + (U[i-1,j] + U[i-1,j+1])*(V[i-1,j]*V[i,j])/4) # first derivative of uv in y
+        dv2dx = dyi*(((V[i,j] + V[i,j+1])/2)^2 - ((V[i,j-1] + V[i,j])/2)^2) # first derivative of u^2 in x
+        dvudy = dxi*((U[i,j] + U[i,j+1])*(V[i,j]*V[i+1,j])/4 - (U[i-1,j] + U[i-1,j+1])*(V[i-1,j]*V[i,j])/4) # first derivative of uv in y
         
         Gij = μ/ρ*(d2vdx2 + d2vdy2) - dv2dx - dvudy
         Vs[i,j] = V[i,j] + Gij*dt # predict the updated u velocity  
@@ -105,7 +105,7 @@ function solvePoisson(Us, Vs, P, dt, params)
     divg = 1
     while iter ≤ itermax && divg ≥ ϵ
         for i in 2:n+1, j in 2:m+1
-            P[i,j] = (1-ω)*P[i,j] + ω*inv(2*(dxi2+dyi2))*(dxi2*(P[i-1,j] + P[i+1,j]) + dyi2*(P[i,j-1] + P[i,j+1]) - rhs[i,j])
+            P[i,j] = (1-ω)*P[i,j] + ω/(2*(dxi2+dyi2))*(dxi2*(P[i-1,j] + P[i+1,j]) + dyi2*(P[i,j-1] + P[i,j+1]) - rhs[i-1,j-1])
         end
 
         # update the pressure boundary conditions in the ghost cells
@@ -117,9 +117,9 @@ function solvePoisson(Us, Vs, P, dt, params)
         # check for convergence
         divg_ij_sum = 0
         for i in 2:n+1, j in 2:m+1
-            divg_ij_sum += (dxi2*(P[i-1,j] - 2P[i,j] + P[i+1,j]) + dxi2*(P[i,j-1] - 2P[i,j] + P[i,j+1]) - rhs[i,j])^2
+            divg_ij_sum += (dxi2*(P[i-1,j] - 2P[i,j] + P[i+1,j]) + dxi2*(P[i,j-1] - 2P[i,j] + P[i,j+1]) - rhs[i-1,j-1])^2
         end
-        divg = sqrt(divg_ij_sum / (n*m))
+        divg = divg_ij_sum / (n*m)
         iter += 1
     end
     return P, divg
@@ -136,23 +136,37 @@ function solveVel(U, V, Us, Vs, P, dt, params)
     return U, V
 end
 
+function create_velocity_func(Ui, Vi, t)
+    # Uinterp = interpolate(Ut[:,:,t], BSpline(Linear()))
+    # Vinterp = interpolate(Vt[:,:,t], BSpline(Linear()))
+
+    function velocity(x,y)
+        return Point2(Ui[x,y,t], Vi[x,y,t])
+    end
+    return velocity
+end
+
 function postProc(Ut, Vt, Pt, params)
-    (;t_step_max) = params
+    (;t_end, n, m) = params
     t_index = Observable(1)
     sliceU = @lift(Ut[:,:, $t_index])
     sliceV = @lift(Vt[:,:, $t_index])
     sliceP = @lift(Pt[:,:, $t_index])
 
+    Ui = interpolate(Ut, BSpline(Linear()))
+    Vi = interpolate(Vt, BSpline(Linear()))
+
     f = Figure()
 
     _, au = heatmap(f[1,1], sliceU; axis = (; title = "U"))
-    Colorbar(f[2,1], au; vertical=false)
-    _, av = heatmap(f[1,2], sliceV; axis = (; title = "V"))
-    Colorbar(f[2,2], av; vertical=false)
-    _, ap = heatmap(f[1,3], sliceP; axis = (; title = "P"))
-    Colorbar(f[2,3], ap; vertical=false)
+    Colorbar(f[1,2], au; vertical=true)
+    _, av = heatmap(f[1,3], sliceV; axis = (; title = "V"))
+    Colorbar(f[1,4], av; vertical=true)
+    _, ap = heatmap(f[2,1], sliceP; axis = (; title = "P"))
+    Colorbar(f[2,2], ap; vertical=true)
+    _, auv = streamplot(f[2,3], @lift(create_velocity_func(Ui, Vi, $t_index)), 1:n+1, 1:m+1; axis = (; title = "(U, V)"))
 
-    sl = Slider(f[3, 1:3], horizontal = true, range = 1:t_step_max)
+    sl = Slider(f[3, 1:4], horizontal = true, range = 1:t_end)
     connect!(t_index, sl.value)
 
     return f
@@ -168,13 +182,15 @@ function fluidsolve(params::Parameters)
     Us::Matrix{Float64} = zeros(n + 1, m + 2)
     Vs::Matrix{Float64} = zeros(n + 2, m + 1)
 
-    Ut::Array{Float64} = zeros(n + 1, m + 2, t_step_max)
-    Vt::Array{Float64} = zeros(n + 2, m + 1, t_step_max)
-    Pt::Array{Float64} = zeros(n + 2, m + 2, t_step_max)
+    Ut::Array{Float64} = zeros(n + 1, m + 2, t_end)
+    Vt::Array{Float64} = zeros(n + 2, m + 1, t_end)
+    Pt::Array{Float64} = zeros(n + 2, m + 2, t_end)
     
     t = 0.
     t_step = 0
-    while t < t_end
+    t_slice = 1
+    divg = -1
+    while t < t_end && divg < 1e100
         dt = comp_delt(U, V, params)
         U, V = placeBCs(U, V, params)
         Us, Vs = solveFG(U, V, Us, Vs, dt, params)
@@ -183,16 +199,19 @@ function fluidsolve(params::Parameters)
 
         t += dt
         t_step += 1
-        Ut[:,:,t_step] = U
-        Vt[:,:,t_step] = V
-        Pt[:,:,t_step] = P
-        println("t_step: $t_step , t: $(round(t; digits=6)) , divg: $divg)")
+        if abs(t_slice - t) < 0.1
+            Ut[:,:,t_slice] = U
+            Vt[:,:,t_slice] = V
+            Pt[:,:,t_slice] = P
+            t_slice += 1
+        end
+        println("t_step: $t_step , t: $(round(t; digits=6)) , divg: $(round(divg; digits=6)) , maxP: $(round(maximum(P); digits=6)) , maxU: $(round(maximum(U); digits=6)) , maxV: $(round(maximum(V); digits=6))")
     end
 
     return postProc(Ut, Vt, Pt, params)
 end
 
 function main()
-    params = Parameters(;n=36, m=36)
+    params = Parameters(;n=32, m=32, t_end = 35)
     return fluidsolve(params)
 end
