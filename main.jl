@@ -1,4 +1,4 @@
-using LinearAlgebra, GLMakie, Observables, Interpolations
+using LinearAlgebra, GLMakie, Observables, Interpolations, JLD, Dates
 
 struct Parameters
     L # length in the x and y directions
@@ -26,8 +26,10 @@ struct Parameters
     dyi2
 end
 
-function Parameters(;L = 1.0, t_end = 35, t_step_max = 128, U_dim = 1.0, μ = 1.0, ρ = 1000.0, τ = 0.9, ϵ = 0.001, ω = 1.7, itermax = 100, BC = 1, n = 25, m = 25)
-    Re = ρ*U_dim*L/μ
+function Parameters(;L = 1.0, t_end = 35, t_step_max = 128, U_dim = 1.0, μ = 1.0, ρ = 1000.0, τ = 0.5, ϵ = 0.001, ω = 1.7, itermax = 100, BC = 1, n = 25, m = 25, Re = -1)
+    if Re == -1
+        Re = ρ*U_dim*L/μ
+    end
     dx, dy = L/n, L/m
     dxi, dyi = 1/dx, 1/dy
     dxi2, dyi2 = dxi^2, dyi^2
@@ -67,7 +69,7 @@ function solveFG(U, V, Us, Vs, dt, params)
         d2udx2 = dxi2*(U[i-1,j] - 2*U[i,j] + U[i+1,j]) # second derivative of u in x
         d2udy2 = dyi2*(U[i,j-1] - 2*U[i,j] + U[i,j+1]) # second derivative of u in y
         du2dx = dxi*(((U[i,j] + U[i+1,j])/2)^2 - ((U[i-1,j] + U[i,j])/2)^2) # first derivative of u^2 in x
-        duvdy = dyi*((U[i,j] + U[i,j+1])*(V[i,j]*V[i+1,j])/4 - (U[i,j-1] + U[i,j])*(V[i,j-1]*V[i+1,j-1])/4) # first derivative of uv in y
+        duvdy = dyi*((U[i,j] + U[i,j+1])*(V[i,j] + V[i+1,j])/4 - (U[i,j-1] + U[i,j])*(V[i,j-1] + V[i+1,j-1])/4) # first derivative of uv in y
         
         Fij = μ/ρ*(d2udx2 + d2udy2) - du2dx - duvdy
         Us[i,j] = U[i,j] + Fij*dt # predict the updated u velocity
@@ -77,7 +79,7 @@ function solveFG(U, V, Us, Vs, dt, params)
         d2vdx2 = dxi2*(V[i-1,j] - 2*V[i,j] + V[i+1,j]) # second derivative of v in x
         d2vdy2 = dyi2*(V[i,j-1] - 2*V[i,j] + V[i,j+1]) # second derivative of v in y
         dv2dx = dyi*(((V[i,j] + V[i,j+1])/2)^2 - ((V[i,j-1] + V[i,j])/2)^2) # first derivative of u^2 in x
-        dvudy = dxi*((U[i,j] + U[i,j+1])*(V[i,j]*V[i+1,j])/4 - (U[i-1,j] + U[i-1,j+1])*(V[i-1,j]*V[i,j])/4) # first derivative of uv in y
+        dvudy = dxi*((U[i,j] + U[i,j+1])*(V[i,j] + V[i+1,j])/4 - (U[i-1,j] + U[i-1,j+1])*(V[i-1,j] + V[i,j])/4) # first derivative of uv in y
         
         Gij = μ/ρ*(d2vdx2 + d2vdy2) - dv2dx - dvudy
         Vs[i,j] = V[i,j] + Gij*dt # predict the updated u velocity  
@@ -89,6 +91,11 @@ function solveFG(U, V, Us, Vs, dt, params)
     Us[n+1,2:m+1] = U[n+1,2:m+1]
     Vs[2:n+1,1] = V[2:n+1,1]
     Vs[2:n+1,m+1] = V[2:n+1,m+1]
+
+    # Us[1,:] = U[1,:]
+    # Us[n+1,:] = U[n+1,:]
+    # Vs[:,1] = V[:,1]
+    # Vs[:,m+1] = V[:,m+1]
 
     return Us, Vs
 end
@@ -152,6 +159,7 @@ function postProc(Ut, Vt, Pt, params)
     sliceU = @lift(Ut[:,:, $t_index])
     sliceV = @lift(Vt[:,:, $t_index])
     sliceP = @lift(Pt[:,:, $t_index])
+    sliceUV = @lift(sqrt.(Ut[:,1:end-1, $t_index].^2 + Vt[1:end-1,:, $t_index].^2))
 
     Ui = interpolate(Ut, BSpline(Linear()))
     Vi = interpolate(Vt, BSpline(Linear()))
@@ -166,14 +174,14 @@ function postProc(Ut, Vt, Pt, params)
     Colorbar(f[2,2], ap; vertical=true)
     _, auv = streamplot(f[2,3], @lift(create_velocity_func(Ui, Vi, $t_index)), 1:n+1, 1:m+1; axis = (; title = "(U, V)"))
 
-    sl = Slider(f[3, 1:4], horizontal = true, range = 1:t_end)
+    sl = Slider(f[4, 1:4], horizontal = true, range = 1:t_end)
     connect!(t_index, sl.value)
 
     return f
 end
 
 function fluidsolve(params::Parameters)
-    (; n, m, t_end, t_step_max) = params
+    (; n, m, t_end, Re) = params
 
     U::Matrix{Float64} = zeros(n + 1, m + 2)
     V::Matrix{Float64} = zeros(n + 2, m + 1)
@@ -207,12 +215,20 @@ function fluidsolve(params::Parameters)
         end
         println("t_step: $t_step , t: $(round(t; digits=6)) , divg: $(round(divg; digits=6)) , maxP: $(round(maximum(P); digits=6)) , maxU: $(round(maximum(U); digits=6)) , maxV: $(round(maximum(V); digits=6))")
     end
+    fig = postProc(Ut, Vt, Pt, params)
 
-    return postProc(Ut, Vt, Pt, params)
+    datetime = replace("$(now())", ":" => ".")
+    dir = mkdir("output/n=$n , Re=$Re , t_end=$t_end , $datetime")
+    @save "$dir/Ut.jld" Ut
+    @save "$dir/Vt.jld" Vt
+    @save "$dir/Pt.jld" Pt
+    @save "$dir/params.jld" params
+
+    return Ut, Vt, Pt, params, fig
 end
 
-function main()
-    params = Parameters(;n=32, m=32, t_end = 35)
+function run()
+    params = Parameters(;n=128, m=128, t_end = 35)
     return fluidsolve(params)
 end
 
