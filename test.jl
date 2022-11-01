@@ -1,21 +1,21 @@
-using Latexify, Interpolations
+using JLD
 
-xx = [i+j+k for i in 0:32, j in 0:32, k in 0:32]
-yy = [i^2 + j^2 + k^2 for i in -16:16, j in -16:16, k in -16:16]
+A = 1.0*[1,2,3,4,5,6,7,8]
+B = 1.0*[1,2,3,4,5,6,7,8]
+function adder(A)
+    for i in 1:8
+        for j in 1:100000000
+            A[i] += sin(j)
+        end
+    end
+end
 
-xxi = interpolate(xx, BSpline(Linear()))
-yyi = interpolate(yy, BSpline(Linear()))
+function thread_adder(A)
+    Threads.@threads for i in 1:8
+        for j in 1:100000000
+            A[i] += sin(j)
+        end
+    end
+end
 
-foo(x,y) = Point(xxi[x,y,8], yyi[x,y,8])
-streamplot(foo, 1:32, 1:32)
-
-tt = Observable(1)
-
-xxit = @lift()
-
-function getPoint(x,y,t)
-    p = Point()
-    function gp(x,y)
-
-fii(x,y) = Point(xxi[x,y,tt], yyi[x,y,tt])
-streamplot(fii, 1:32, 1:32)
+AA = load("test_A.jld")
