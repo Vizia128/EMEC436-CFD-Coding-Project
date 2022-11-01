@@ -183,6 +183,9 @@ end
 function fluidsolve(params::Parameters)
     (; n, m, t_end, Re) = params
 
+    datetime = replace("$(now())", ":" => ".")
+    dir = mkdir("output/n=$n , Re=$Re , t_end=$t_end , $datetime")
+
     U::Matrix{Float64} = zeros(n + 1, m + 2)
     V::Matrix{Float64} = zeros(n + 2, m + 1)
     P::Matrix{Float64} = zeros(n + 2, m + 2)
@@ -211,18 +214,15 @@ function fluidsolve(params::Parameters)
             Ut[:,:,t_slice] = U
             Vt[:,:,t_slice] = V
             Pt[:,:,t_slice] = P
-            t_slice += 1
+            t_slice += 1    
+            @save "$dir/Ut.jld" Ut
+            @save "$dir/Vt.jld" Vt
+            @save "$dir/Pt.jld" Pt
+            @save "$dir/params.jld" params
         end
         println("t_step: $t_step , t: $(round(t; digits=6)) , divg: $(round(divg; digits=6)) , maxP: $(round(maximum(P); digits=6)) , maxU: $(round(maximum(U); digits=6)) , maxV: $(round(maximum(V); digits=6))")
     end
     fig = postProc(Ut, Vt, Pt, params)
-
-    datetime = replace("$(now())", ":" => ".")
-    dir = mkdir("output/n=$n , Re=$Re , t_end=$t_end , $datetime")
-    @save "$dir/Ut.jld" Ut
-    @save "$dir/Vt.jld" Vt
-    @save "$dir/Pt.jld" Pt
-    @save "$dir/params.jld" params
 
     return Ut, Vt, Pt, params, fig
 end
