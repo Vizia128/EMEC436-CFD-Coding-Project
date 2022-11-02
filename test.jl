@@ -19,3 +19,12 @@ function thread_adder(A)
 end
 
 AA = load("test_A.jld")
+
+function foo(;a=1, b=2, c=3)
+    return a+b+c
+end
+
+function fii(; a, b)
+    println(kwargs)
+    foo(;a, b)
+end

@@ -4,6 +4,7 @@ struct Parameters
     L # length in the x and y directions
     t_end # end time
     t_step_max # maximum time steps
+    t_record # recording time scale
 
     U_dim # non-dimensional x-velocity
     μ # dynamic viscosity
@@ -26,14 +27,13 @@ struct Parameters
     dyi2
 end
 
-function Parameters(;L = 1.0, t_end = 35, t_step_max = 128, U_dim = 1.0, μ = 1.0, ρ = 1000.0, τ = 0.5, ϵ = 0.001, ω = 1.7, itermax = 100, BC = 1, n = 25, m = 25, Re = -1)
-    if Re == -1
-        Re = ρ*U_dim*L/μ
-    end
+function Parameters(;L = 1.0, t_end = 35, t_step_max = 128, U_dim = 1.0, μ = 1.0, ρ = 1000.0, τ = 0.5, ϵ = 0.001, ω = 1.7, itermax = 100, BC = 1, n = 25, m = 25, t_record = 1)
+    Re = ρ*U_dim*L/μ
+
     dx, dy = L/n, L/m
     dxi, dyi = 1/dx, 1/dy
     dxi2, dyi2 = dxi^2, dyi^2
-    return Parameters(L, t_end,t_step_max, U_dim, μ, ρ, Re, τ, ϵ, ω, itermax, BC, n, m, dx, dy, dxi, dyi, dxi2, dyi2)
+    return Parameters(L, t_end,t_step_max, t_record, U_dim, μ, ρ, Re, τ, ϵ, ω, itermax, BC, n, m, dx, dy, dxi, dyi, dxi2, dyi2)
 end
 
 function comp_delt(U, V, params)
@@ -180,8 +180,14 @@ function postProc(Ut, Vt, Pt, params)
     return f
 end
 
+function postProc(dir::String)
+    dict = load(dir)
+    fig = postProc(dict["Ut"], dict["Vt"], dict["Pt"], dict["params"])
+    return fig
+end
+
 function fluidsolve(params::Parameters)
-    (; n, m, t_end, Re) = params
+    (; n, m, t_end, t_record, Re) = params
 
     datetime = replace("$(now())", ":" => ".")
     dir = mkdir("output/n=$n , Re=$Re , t_end=$t_end , $datetime")
@@ -199,7 +205,7 @@ function fluidsolve(params::Parameters)
     
     t = 0.
     t_step = 0
-    t_slice = 1
+    t_slice = t_record
     divg = -1
     while t < t_end && divg < 1e100
         dt = comp_delt(U, V, params)
@@ -214,21 +220,18 @@ function fluidsolve(params::Parameters)
             Ut[:,:,t_slice] = U
             Vt[:,:,t_slice] = V
             Pt[:,:,t_slice] = P
-            t_slice += 1    
-            @save "$dir/Ut.jld" Ut
-            @save "$dir/Vt.jld" Vt
-            @save "$dir/Pt.jld" Pt
-            @save "$dir/params.jld" params
+            t_slice += t_record    
+            @save "$dir/Ut.jld" Ut Vt Pt params
         end
         println("t_step: $t_step , t: $(round(t; digits=6)) , divg: $(round(divg; digits=6)) , maxP: $(round(maximum(P); digits=6)) , maxU: $(round(maximum(U); digits=6)) , maxV: $(round(maximum(V); digits=6))")
     end
     fig = postProc(Ut, Vt, Pt, params)
 
-    return Ut, Vt, Pt, params, fig
+    return fig
 end
 
-function run()
-    params = Parameters(;n=128, m=128, t_end = 35)
+function run(;L = 1.0, t_end = 35, t_step_max = 128, U_dim = 1.0, μ = 1.0, ρ = 1000.0, τ = 0.5, ϵ = 0.001, ω = 1.7, itermax = 100, BC = 1, n = 25, m = 25, t_record = 1)
+    params = Parameters(;L, t_end, t_step_max, U_dim, μ, ρ, τ, ϵ, ω, itermax, BC, n, m, t_record)
     return fluidsolve(params)
 end
 
