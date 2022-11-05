@@ -1,10 +1,103 @@
-$dt = tau \cdot \mathrm{max}\left( 1.0e-9, \mathrm{min}\left( \left[
-\begin{array}{c}
-\frac{0.5 \cdot Re}{dxi^{2} + dyi^{2}} \\
-\frac{dx}{\mathrm{max}\left( \mathrm{max}\left( \left|U\right| \right) \right)} \\
-\frac{dy}{\mathrm{max}\left( \mathrm{max}\left( \left|V\right| \right) \right)} \\
-\end{array}
-\right] \right) \right)$
+---
+title: "EGEN 436, Coding Project"
+author: "Julian Kizanis"
+date: "11/4/2022"
+bibliography: Coding Project.bib
+geometry: margin=1cm
+papersize: letter
+format:
+  html:
+    code-fold: true
+jupyter: julia-1.8
+code-line-numbers: true
+highlight-style: arrow
+---
+
+# My CDF Solver
+My code solves the lid-driven cavity flow CFD problem in the incompressible regime. The lid-driven cavity is the interior of a 2D box. The top wall is sliding with some velocity, while the remaining walls remain still. The space is discretized with a regular Euclidian grid. The code is written in Julia. To run the simulation from a Julia REPL:
+
+1. Change the directory to the folder that contains "main.jl" with the command:
+```{julia}
+#| eval: false
+cd("C:/Your Folder/Coding Project Folder")
+```
+
+2. If you have not added the requsite libraries before, add them with the command:
+```{julia}
+#| eval: false
+using Pkg
+Pkg.add("LinearAlgebra", "CairoMakie", "Observables", "Interpolations", "JLD", "Dates")
+```
+
+3. Run the simulation with the command run(). If you wish, you can add any or all of the optional parameters. There is no protection to prevent you from inputing non-physical parameters. All of the optional parateters and their default values are shown below. 
+```{julia}
+#| eval: false
+run(L = 1.0, t_end = 35, t_step_max = 128, U_dim = 1.0, mu = 1.0, rho = 1000.0, tau = 0.5, 
+    epsilon = 0.001, omega = 1.7, itermax = 100, BC = 1, n = 25, m = 25, t_record = 1)
+```
+
+4. You should recieve a progress report at each time step. The parameter "t_record" determines the time gap between permanently saved time slices. After the simulation is finished you can scroll through a pop up figure with the slider at the bottom. All of the saved data is contained in the folder "output" within ".jld" files. Helper functions for reading these files can be found in the file "solutions.jl".
 
 
-$dt = \tau \cdot \mathrm{max}\left( 1.0e-9, \mathrm{min}\left( \frac{0.5 \cdot Re}{dx^{-2} + dy^{-2}}, \frac{dx}{\mathrm{maximum}\left( \left|U\right| \right)}, \frac{dy}{\mathrm{maximum}\left( \left|V\right| \right)} \right) \right)$
+# Comparison of Velocities Through Geometric Center of Cavity
+The data for the following figures are taken from my solver (Zia), Star CCM+ (Star) and [@ghia_high-re_1982] (Ghia). It is remarkable how similar the results are. My Star model seems to have the largest extrema while my Zia model seems to have the smallest extrema. 
+```{julia}
+#| echo: false
+#| warning: false
+#| output: false
+include("solutions.jl")
+```
+
+```{julia}
+#| echo: false
+#| warning: false
+#| fig-cap: Centerline Velocities for Re = 100
+ffig = center_velocity_compare("output/n=128 , Re=100.0 , t_end=35 , 2022-11-02T19.16.58.031/Ut.jld",
+    "StarCCM/Re100 U.csv", "StarCCM/Re100 V.csv", "Ghia/Re100 U.csv", "Ghia/Re100 V.csv", 100)
+```
+
+```{julia}
+#| echo: false
+#| warning: false
+#| fig-cap: Centerline Velocities for Re = 400
+ffig = center_velocity_compare("output/n=128 , Re=400.0 , t_end=35 , 2022-11-02T19.11.14.253/Ut.jld",
+    "StarCCM/Re400 U.csv", "StarCCM/Re400 V.csv", "Ghia/Re400 U.csv", "Ghia/Re400 V.csv", 400)
+```
+
+```{julia}
+#| echo: false
+#| warning: false
+#| fig-cap: Centerline Velocities for Re = 1000
+ffig = center_velocity_compare("output/n=128 , Re=1000.0 , t_end=35 , 2022-11-02T19.30.18.347/Ut.jld",
+    "StarCCM/Re1000 U.csv", "StarCCM/Re1000 V.csv", "Ghia/Re1000 U.csv", "Ghia/Re1000 V.csv", 1000)
+```
+
+\pagebreak
+
+# Time Series Analysis
+All of the following plots are from my solver. The system reaches equalibrium quite quickly. The time slices at t=16 and t=32 are very similar. The pressures at the top left and right corners are much larger than the rest of the plot.
+
+![U, V, P and Streamline plot at t = 1 and Re = 400](output/Re=400.0/UVPstreamline_ts=1.png)
+
+\pagebreak
+
+![U, V, P and Streamline plot at t = 2 and Re = 400](output/Re=400.0/UVPstreamline_ts=2.png)
+
+\pagebreak
+
+![U, V, P and Streamline plot at t = 4 and Re = 400](output/Re=400.0/UVPstreamline_ts=4.png)
+
+\pagebreak
+
+![U, V, P and Streamline plot at t = 8 and Re = 400](output/Re=400.0/UVPstreamline_ts=8.png)
+
+\pagebreak
+
+![U, V, P and Streamline plot at t = 16 and Re = 400](output/Re=400.0/UVPstreamline_ts=16.png)
+
+\pagebreak
+
+![U, V, P and Streamline plot at t = 32 and Re = 400](output/Re=400.0/UVPstreamline_ts=32.png)
+
+\pagebreak
+# References

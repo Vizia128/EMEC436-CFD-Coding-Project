@@ -1,4 +1,4 @@
-using LinearAlgebra, GLMakie, Observables, Interpolations, JLD, Dates
+using LinearAlgebra, CairoMakie, Observables, Interpolations, JLD, Dates
 
 struct Parameters
     L # length in the x and y directions
@@ -27,7 +27,9 @@ struct Parameters
     dyi2
 end
 
-function Parameters(;L = 1.0, t_end = 35, t_step_max = 128, U_dim = 1.0, μ = 1.0, ρ = 1000.0, τ = 0.5, ϵ = 0.001, ω = 1.7, itermax = 100, BC = 1, n = 25, m = 25, t_record = 1)
+function Parameters(;L = 1.0, t_end = 35, t_step_max = 128, U_dim = 1.0, 
+        μ = 1.0, ρ = 1000.0, τ = 0.5, ϵ = 0.001, ω = 1.7,
+        itermax = 100, BC = 1, n = 25, m = 25, t_record = 1)
     Re = ρ*U_dim*L/μ
 
     dx, dy = L/n, L/m
@@ -36,9 +38,9 @@ function Parameters(;L = 1.0, t_end = 35, t_step_max = 128, U_dim = 1.0, μ = 1.
     return Parameters(L, t_end,t_step_max, t_record, U_dim, μ, ρ, Re, τ, ϵ, ω, itermax, BC, n, m, dx, dy, dxi, dyi, dxi2, dyi2)
 end
 
-function comp_delt(U, V, params)
-    (; τ, Re, dx, dy, dxi2, dyi2) = params
-    return τ*max(1.0e-9, min(0.5*Re/(dxi2 + dyi2), dx/maximum(abs.(U)), dy/maximum(abs.(V))))
+function comp_delt(U, V, divg, params)
+    (; τ, Re, ϵ, dx, dy, dxi2, dyi2) = params
+    return τ*max(1.0e-9, min(0.5*Re/(dxi2 + dyi2), dx/maximum(abs.(U)), dy/maximum(abs.(V))))/max(2log10(divg/ϵ)+1, 1)
 end
 
 function placeBCs(U, V, params)
@@ -190,6 +192,7 @@ function fluidsolve(params::Parameters)
     (; n, m, t_end, t_record, Re) = params
 
     datetime = replace("$(now())", ":" => ".")
+    isdir("output") ? true : mkdir("output")
     dir = mkdir("output/n=$n , Re=$Re , t_end=$t_end , $datetime")
 
     U::Matrix{Float64} = zeros(n + 1, m + 2)
@@ -199,16 +202,16 @@ function fluidsolve(params::Parameters)
     Us::Matrix{Float64} = zeros(n + 1, m + 2)
     Vs::Matrix{Float64} = zeros(n + 2, m + 1)
 
-    Ut::Array{Float64} = zeros(n + 1, m + 2, t_end)
-    Vt::Array{Float64} = zeros(n + 2, m + 1, t_end)
-    Pt::Array{Float64} = zeros(n + 2, m + 2, t_end)
+    Ut::Array{Float64} = zeros(n + 1, m + 2, Int(ceil(t_end/t_record)))
+    Vt::Array{Float64} = zeros(n + 2, m + 1, Int(ceil(t_end/t_record)))
+    Pt::Array{Float64} = zeros(n + 2, m + 2, Int(ceil(t_end/t_record)))
     
     t = 0.
-    t_step = 0
-    t_slice = t_record
-    divg = -1
+    t_step::Int = 0
+    t_slice::Int = 1
+    divg = 1
     while t < t_end && divg < 1e100
-        dt = comp_delt(U, V, params)
+        dt = comp_delt(U, V, divg, params)
         U, V = placeBCs(U, V, params)
         Us, Vs = solveFG(U, V, Us, Vs, dt, params)
         P, divg = solvePoisson(Us, Vs, P, dt, params)
@@ -216,11 +219,11 @@ function fluidsolve(params::Parameters)
 
         t += dt
         t_step += 1
-        if abs(t_slice - t) < 0.1
+        if abs(t_slice*t_record - t) < t_record/10
             Ut[:,:,t_slice] = U
             Vt[:,:,t_slice] = V
             Pt[:,:,t_slice] = P
-            t_slice += t_record    
+            t_slice += 1   
             @save "$dir/Ut.jld" Ut Vt Pt params
         end
         println("t_step: $t_step , t: $(round(t; digits=6)) , divg: $(round(divg; digits=6)) , maxP: $(round(maximum(P); digits=6)) , maxU: $(round(maximum(U); digits=6)) , maxV: $(round(maximum(V); digits=6))")
@@ -230,10 +233,11 @@ function fluidsolve(params::Parameters)
     return fig
 end
 
-function run(;L = 1.0, t_end = 35, t_step_max = 128, U_dim = 1.0, μ = 1.0, ρ = 1000.0, τ = 0.5, ϵ = 0.001, ω = 1.7, itermax = 100, BC = 1, n = 25, m = 25, t_record = 1)
+function run(;L = 1.0, t_end = 35, t_step_max = 128, U_dim = 1.0, 
+        μ = 1.0, ρ = 1000.0, τ = 0.5, ϵ = 0.001, ω = 1.7, 
+        mu = 1.0, rho = 1000.0, tau = 0.5, epsilon = 0.001, omega = 1.7, 
+        itermax = 100, BC = 1, n = 25, m = 25, t_record = 1)
+    μ, ρ, τ, ϵ, ω = mu, rho, tau, epsilon, omega
     params = Parameters(;L, t_end, t_step_max, U_dim, μ, ρ, τ, ϵ, ω, itermax, BC, n, m, t_record)
     return fluidsolve(params)
 end
-
-# solution histories
-# tables
